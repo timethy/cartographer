@@ -76,6 +76,20 @@ class TrajectoryBuilder {
                   sensor::MakeDispatchable(
                       sensor::FixedFramePoseData{time, fixed_frame_pose}));
   }
+
+  void AddLandmarkData(const std::string& sensor_id, common::Time time,
+                       const std::vector<std::string>& landmark_ids,
+                       const std::vector<transform::Rigid3d>& landmark_poses) {
+    CHECK_EQ(landmark_ids.size(), landmark_poses.size());
+    std::vector<sensor::Landmark> landmarks(landmark_ids.size());
+    for(size_t i = 0; i < landmark_ids.size(); i++) {
+      landmarks[i].id = landmark_ids[i];
+      landmarks[i].transform = landmark_poses[i];
+    }
+    AddSensorData(sensor_id,
+                  sensor::MakeDispatchable(
+                      sensor::LandmarkData{time, landmarks}));
+  }
 };
 
 }  // namespace mapping
