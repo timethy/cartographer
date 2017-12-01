@@ -175,7 +175,10 @@ void PoseGraph::AddFixedFramePoseData(
 void PoseGraph::AddLandmarkData(
     const int trajectory_id,
     const sensor::LandmarkData& landmark_data) {
-  LOG(FATAL) << "Not yet implemented for 2D.";
+  common::MutexLocker locker(&mutex_);
+  AddWorkItem([=]() REQUIRES(mutex_) {
+    optimization_problem_.AddLandmarkData(trajectory_id, landmark_data);
+  });
 }
 
 void PoseGraph::ComputeConstraint(const mapping::NodeId& node_id,
@@ -571,6 +574,12 @@ PoseGraph::GetTrajectoryNodes() {
   return trajectory_nodes_;
 }
 
+std::map<mapping::LandmarkId, sensor::Landmark>
+PoseGraph::GetLandmarks() {
+  common::MutexLocker locker(&mutex_);
+  return optimization_problem_.landmarks();
+}
+
 sensor::MapByTime<sensor::ImuData> PoseGraph::GetImuData() {
   common::MutexLocker locker(&mutex_);
   return optimization_problem_.imu_data();
@@ -584,6 +593,11 @@ sensor::MapByTime<sensor::OdometryData> PoseGraph::GetOdometryData() {
 sensor::MapByTime<sensor::FixedFramePoseData>
 PoseGraph::GetFixedFramePoseData() {
   return {};  // Not implemented yet in 2D.
+}
+
+sensor::MapByTime<sensor::LandmarkData> PoseGraph::GetLandmarkData() {
+  common::MutexLocker locker(&mutex_);
+  return optimization_problem_.landmark_data();
 }
 
 std::vector<PoseGraph::Constraint> PoseGraph::constraints() {

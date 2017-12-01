@@ -98,7 +98,7 @@ class PoseGraph {
       int trajectory_id,
       const sensor::FixedFramePoseData& fixed_frame_pose_data) = 0;
 
-  // Inserts a landmark measurement.
+  // Inserts a vector of landmark measurements.
   virtual void AddLandmarkData(
       int trajectory_id,
       const sensor::LandmarkData& landmark_data) = 0;
@@ -158,6 +158,10 @@ class PoseGraph {
   // Returns the current optimized trajectories.
   virtual MapById<NodeId, TrajectoryNode> GetTrajectoryNodes() = 0;
 
+  // Returns the currently estimated landmarks
+  virtual std::map<LandmarkId, sensor::Landmark>
+  GetLandmarks() = 0;
+
   // Serializes the constraints and trajectories.
   proto::PoseGraph ToProto();
 
@@ -170,6 +174,10 @@ class PoseGraph {
   // Returns the fixed frame pose data.
   virtual sensor::MapByTime<sensor::FixedFramePoseData>
   GetFixedFramePoseData() = 0;
+
+  // Returns the fixed frame pose data.
+  virtual sensor::MapByTime<sensor::LandmarkData>
+  GetLandmarkData() = 0;
 
   // Returns the collection of constraints.
   virtual std::vector<Constraint> constraints() = 0;

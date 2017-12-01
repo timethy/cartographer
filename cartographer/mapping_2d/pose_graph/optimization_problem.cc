@@ -70,6 +70,11 @@ void OptimizationProblem::AddOdometryData(
   odometry_data_.Append(trajectory_id, odometry_data);
 }
 
+void OptimizationProblem::AddLandmarkData(
+    const int trajectory_id, const sensor::LandmarkData& landmark_data) {
+  landmark_data_.Append(trajectory_id, landmark_data);
+}
+
 void OptimizationProblem::AddTrajectoryNode(
     const int trajectory_id, const common::Time time,
     const transform::Rigid2d& initial_pose, const transform::Rigid2d& pose,
@@ -89,6 +94,7 @@ void OptimizationProblem::InsertTrajectoryNode(
 void OptimizationProblem::TrimTrajectoryNode(const mapping::NodeId& node_id) {
   imu_data_.Trim(node_data_, node_id);
   odometry_data_.Trim(node_data_, node_id);
+  landmark_data_.Trim(node_data_, node_id);
   node_data_.Trim(node_id);
 }
 
@@ -126,6 +132,7 @@ void OptimizationProblem::Solve(const std::vector<Constraint>& constraints,
   // TODO(hrapp): Move ceres data into SubmapData.
   mapping::MapById<mapping::SubmapId, std::array<double, 3>> C_submaps;
   mapping::MapById<mapping::NodeId, std::array<double, 3>> C_nodes;
+  std::map<mapping::LandmarkId, std::array<double, 3>> C_landmarks;
   bool first_submap = true;
   for (const auto& submap_id_data : submap_data_) {
     const bool frozen =
@@ -149,6 +156,18 @@ void OptimizationProblem::Solve(const std::vector<Constraint>& constraints,
       problem.SetParameterBlockConstant(C_nodes.at(node_id_data.id).data());
     }
   }
+  // Initialize landmarks
+  for (const auto& landmark_id_data : landmarks_) {
+    C_landmarks.emplace(landmark_id_data.first, FromPose(Project2D(landmark_id_data.second.transform)));
+    CHECK(C_landmarks.find(landmark_id_data.first) != C_landmarks.end());
+    problem.AddParameterBlock(C_landmarks.at(landmark_id_data.first).data(), 3);
+    // TODO (timethy): Add possibility to freeze landmarks
+    bool frozen = false;
+    if (frozen) {
+      problem.SetParameterBlockConstant(C_landmarks.at(landmark_id_data.first).data());
+    }
+  }
+
   // Add cost functions for intra- and inter-submap constraints.
   for (const Constraint& constraint : constraints) {
     problem.AddResidualBlock(
@@ -167,6 +186,8 @@ void OptimizationProblem::Solve(const std::vector<Constraint>& constraints,
   for (auto node_it = node_data_.begin(); node_it != node_data_.end();) {
     const int trajectory_id = node_it->id.trajectory_id;
     const auto trajectory_end = node_data_.EndOfTrajectory(trajectory_id);
+
+    // TODO: add landmark constraints (even if frozen)
     if (frozen_trajectories.count(trajectory_id) != 0) {
       node_it = trajectory_end;
       continue;
@@ -193,8 +214,97 @@ void OptimizationProblem::Solve(const std::vector<Constraint>& constraints,
                   options_.consecutive_node_rotation_weight()})),
           nullptr /* loss function */, C_nodes.at(first_node_id).data(),
           C_nodes.at(second_node_id).data());
+
+      // Skip landmarks if trajectory has no landmark observations
+      if (!landmark_data_.HasTrajectory(trajectory_id)) {
+        continue;
+      }
+
+      // Find all landmark observations in between two nodes
+      // Iterator to first landmark at or after first node:
+      const auto landmark_it_start = landmark_data_.upper_bound(trajectory_id, first_node_data.time);
+      // Iterator to last landmark before second node:
+      const auto landmark_it_end = landmark_data_.lower_bound(trajectory_id, second_node_data.time);
+      // TODO: CHECK_LE(landmark_it_start, landmark_it_end);
+      for(auto landmark_it = landmark_it_start; landmark_it != landmark_it_end; ++landmark_it) {
+        // Interpolate observation frame
+        const auto observation_pose = Project2D(Interpolate(
+            transform::TimestampedTransform{first_node_data.time, Embed3D(first_node_data.pose)},
+            transform::TimestampedTransform{second_node_data.time, Embed3D(second_node_data.pose)},
+            landmark_it->time).transform);
+        // Add constraint for first_node
+        const auto T_first_observation = first_node_data.pose.inverse() * observation_pose;
+        for (const auto& landmark : landmark_it->landmarks) {
+          const auto T_first_landmark = T_first_observation * Project2D(landmark.transform);
+
+          if (C_landmarks.find(landmark.id) == C_landmarks.end()) {
+            // Initialize landmark with first observation
+            C_landmarks.emplace(landmark.id, FromPose(observation_pose * Project2D(landmark.transform)));
+            problem.AddParameterBlock(C_landmarks.at(landmark.id).data(), 3);
+          }
+
+          problem.AddResidualBlock(
+              new ceres::AutoDiffCostFunction<SpaCostFunction, 3, 3, 3>(
+                  new SpaCostFunction(Constraint::Pose{
+                      Embed3D(T_first_landmark),
+                      options_.landmark_translation_weight(),
+                      options_.landmark_rotation_weight()})),
+              nullptr /* loss function */,
+              C_nodes.at(first_node_id).data(),
+              C_landmarks.at(landmark.id).data());
+        }
+        if (landmark_it->time == first_node_data.time) {
+          continue;
+        }
+        // TODO (timethy): Mhmm, I smell repeated code.
+        const auto T_second_observation = first_node_data.pose.inverse() * observation_pose;
+        // Add constraint for second node (only if landmark was observed AFTER first node)
+        for (const auto& landmark : landmark_it->landmarks) {
+          const auto T_second_landmark = T_second_observation * Project2D(landmark.transform);
+
+          problem.AddResidualBlock(
+              new ceres::AutoDiffCostFunction<SpaCostFunction, 3, 3, 3>(
+                  new SpaCostFunction(Constraint::Pose{
+                      Embed3D(T_second_landmark),
+                      options_.landmark_translation_weight(),
+                      options_.landmark_rotation_weight()})),
+              nullptr /* loss function */,
+              C_nodes.at(second_node_id).data(),
+              C_landmarks.at(landmark.id).data());
+        }
+      }
     }
   }
+
+/*
+  // Add all landmark observations as constraints between nodes and landmarks
+  for (const int trajectory_id : landmark_data_.trajectory_ids()) {
+    if (!odometry_data_.HasTrajectory(trajectory_id)) {
+      continue;
+    }
+    // TODO (timethy): Insert a node for every observed landmark (maybe as an option).
+    // For every landmark find node before and after observation time
+    for (const auto& landmark_data : landmark_data_.trajectory(trajectory_id)) {
+      // Interpolate nodes to get the pose of the observation frame of the landmark
+      transform::Rigid3d observation_pose;
+      const auto it = odometry_data_.lower_bound(trajectory_id, landmark_data.time);
+      // Case 0 of no matching node
+      if (it == odometry_data_.EndOfTrajectory(trajectory_id)) {
+        continue;
+      }
+      if (it == odometry_data_.BeginOfTrajectory(trajectory_id)) {
+        // Case 1 of matching landmark time and node time:
+        if (it->time == landmark_data.time) {
+
+        }
+        continue;
+      }
+      // Case of matching landmark time and node time:
+
+      // Transform landmark observation into first node's frame (constraint 1)
+      // Transform landmark observation into second node's frame (constraint 2)
+    }
+  }*/
 
   // Solve.
   ceres::Solver::Summary summary;
@@ -213,6 +323,9 @@ void OptimizationProblem::Solve(const std::vector<Constraint>& constraints,
   for (const auto& C_node_id_data : C_nodes) {
     node_data_.at(C_node_id_data.id).pose = ToPose(C_node_id_data.data);
   }
+  for (const auto& C_landmark_id_data : C_landmarks) {
+    landmarks_.at(C_landmark_id_data.first).transform = Embed3D(ToPose(C_landmark_id_data.second));
+  }
 }
 
 const mapping::MapById<mapping::NodeId, NodeData>&
@@ -225,6 +338,11 @@ OptimizationProblem::submap_data() const {
   return submap_data_;
 }
 
+const std::map<mapping::LandmarkId, sensor::Landmark>&
+OptimizationProblem::landmarks() const {
+  return landmarks_;
+}
+
 const sensor::MapByTime<sensor::ImuData>& OptimizationProblem::imu_data()
     const {
   return imu_data_;
@@ -233,6 +351,11 @@ const sensor::MapByTime<sensor::ImuData>& OptimizationProblem::imu_data()
 const sensor::MapByTime<sensor::OdometryData>&
 OptimizationProblem::odometry_data() const {
   return odometry_data_;
+}
+
+const sensor::MapByTime<sensor::LandmarkData>&
+OptimizationProblem::landmark_data() const {
+  return landmark_data_;
 }
 
 std::unique_ptr<transform::Rigid3d> OptimizationProblem::InterpolateOdometry(

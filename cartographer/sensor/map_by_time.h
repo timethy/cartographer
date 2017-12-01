@@ -203,6 +203,12 @@ class MapByTime {
     return ConstIterator(data_.at(trajectory_id).lower_bound(time));
   }
 
+  // Analogously to lower_bound
+  ConstIterator upper_bound(const int trajectory_id,
+                            const common::Time time) const {
+    return ConstIterator(data_.at(trajectory_id).upper_bound(time));
+  }
+
  private:
   std::map<int, std::map<common::Time, DataType>> data_;
 };
