@@ -22,6 +22,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <sstream>
 #include <vector>
 
 #include "cartographer/common/ceres_solver_options.h"
@@ -180,6 +181,8 @@ void OptimizationProblem::Solve(const std::vector<Constraint>& constraints,
         C_submaps.at(constraint.submap_id).data(),
         C_nodes.at(constraint.node_id).data());
   }
+  
+  size_t n_landmark_constraints = 0;
 
   // Add penalties for violating odometry or changes between consecutive nodes
   // if odometry is not available.
@@ -239,10 +242,12 @@ void OptimizationProblem::Solve(const std::vector<Constraint>& constraints,
 
           if (C_landmarks.find(landmark.id) == C_landmarks.end()) {
             // Initialize landmark with first observation
-            C_landmarks.emplace(landmark.id, FromPose(observation_pose * Project2D(landmark.transform)));
+            const auto initial_pose = observation_pose * Project2D(landmark.transform);
+            landmarks_.emplace(landmark.id, sensor::Landmark{landmark.id, Embed3D(initial_pose), 0., 0.});
+            C_landmarks.emplace(landmark.id, FromPose(initial_pose));
             problem.AddParameterBlock(C_landmarks.at(landmark.id).data(), 3);
           }
-
+  
           problem.AddResidualBlock(
               new ceres::AutoDiffCostFunction<SpaCostFunction, 3, 3, 3>(
                   new SpaCostFunction(Constraint::Pose{
@@ -252,6 +257,8 @@ void OptimizationProblem::Solve(const std::vector<Constraint>& constraints,
               nullptr /* loss function */,
               C_nodes.at(first_node_id).data(),
               C_landmarks.at(landmark.id).data());
+  
+          n_landmark_constraints++;
         }
         if (landmark_it->time == first_node_data.time) {
           continue;
@@ -271,6 +278,7 @@ void OptimizationProblem::Solve(const std::vector<Constraint>& constraints,
               nullptr /* loss function */,
               C_nodes.at(second_node_id).data(),
               C_landmarks.at(landmark.id).data());
+          n_landmark_constraints++;
         }
       }
     }
@@ -324,8 +332,19 @@ void OptimizationProblem::Solve(const std::vector<Constraint>& constraints,
     node_data_.at(C_node_id_data.id).pose = ToPose(C_node_id_data.data);
   }
   for (const auto& C_landmark_id_data : C_landmarks) {
+    CHECK(landmarks_.find(C_landmark_id_data.first) != landmarks_.end());
     landmarks_.at(C_landmark_id_data.first).transform = Embed3D(ToPose(C_landmark_id_data.second));
   }
+  LOG(INFO) << "Added " << n_landmark_constraints << " landmark constraints.";
+  std::ostringstream oss;
+  for (const auto& C_landmark_id_data : C_landmarks)
+  {
+    oss << C_landmark_id_data.first << ", " <<
+        C_landmark_id_data.second[0] << ", " <<
+        C_landmark_id_data.second[1] << ", " <<
+        C_landmark_id_data.second[2] << "\n";
+  }
+  LOG(INFO) << oss.str();
 }
 
 const mapping::MapById<mapping::NodeId, NodeData>&
