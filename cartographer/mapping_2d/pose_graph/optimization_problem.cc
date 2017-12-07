@@ -96,6 +96,9 @@ std::unique_ptr<transform::Rigid3d> Interpolate(
   if (it->time > time + max_delta_time) {
     return nullptr;
   }
+
+  LOG(INFO) << "Interpolating from " << prev_it->time << " (" << prev_it->landmark.transform << ")\n"
+            << "to " << it->time << " (" << it->landmark.transform << ")";
   return common::make_unique<transform::Rigid3d>(
       Interpolate(transform::TimestampedTransform{prev_it->time, prev_it->landmark.transform},
                   transform::TimestampedTransform{it->time, it->landmark.transform}, time)
@@ -292,28 +295,35 @@ void OptimizationProblem::Solve(const std::vector<Constraint>& constraints,
 
       for(const auto& landmark_id: landmarks_in_trajectory_.at(node_id.trajectory_id)) {
         const common::Duration kMaxTimeToNearestLandmarkObservation = common::FromMilliseconds(250);
-        const std::unique_ptr<transform::Rigid3d> landmark_pose =
+        const std::unique_ptr<transform::Rigid3d> landmark_pose_ptr =
             Interpolate(landmark_data_by_id_.at(landmark_id), trajectory_id, node_data.time, kMaxTimeToNearestLandmarkObservation);
-        if (landmark_pose == nullptr) {
+        if (landmark_pose_ptr == nullptr) {
           continue;
         }
 
+        // Somehow there is a yaw part in here.
+        const auto landmark_pose = transform::Rigid3d::Rotation(
+            node_data.gravity_alignment) * (*landmark_pose_ptr);
+
         // Initialize landmark if this is the first observation of it
         if (C_landmarks.find(landmark_id) == C_landmarks.end()) {
-          const auto initial_pose = node_data.pose * Project2D(*landmark_pose);
-          landmark_poses_.emplace(landmark_id, Embed3D(initial_pose));
-          C_landmarks.emplace(landmark_id, FromPose(initial_pose));
+          const auto initial_pose = Embed3D(node_data.pose) * landmark_pose;
+          landmark_poses_.emplace(landmark_id, initial_pose);
+          C_landmarks.emplace(landmark_id, FromPose(Project2D(initial_pose)));
           problem.AddParameterBlock(C_landmarks.at(landmark_id).data(), 3);
         }
 
         const mapping::PoseGraph::Constraint::Pose landmark_pose_constraint{
-            *landmark_pose, options_.landmark_translation_weight(),
+            landmark_pose, options_.landmark_translation_weight(),
             options_.landmark_rotation_weight()};
+
+        LOG(INFO) << "Add landmark pose constraint: " << landmark_pose << " from node: " << node_id << "\n"
+                  << "node at : " << node_data.pose << " with gravity alignment " << node_data.gravity_alignment.vec();
 
         problem.AddResidualBlock(
             new ceres::AutoDiffCostFunction<SpaCostFunction, 3, 3, 3>(
                 new SpaCostFunction(landmark_pose_constraint)),
-            nullptr /* loss function */,
+            nullptr,
             C_nodes.at(node_id).data(),
             C_landmarks.at(landmark_id).data());
 

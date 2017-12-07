@@ -50,6 +50,10 @@ struct SubmapData {
   transform::Rigid2d global_pose;
 };
 
+struct LandmarkPoseData {
+  transform::Rigid2d landmark_pose;
+};
+
 // Implements the SPA loop closure method.
 class OptimizationProblem {
  public:
