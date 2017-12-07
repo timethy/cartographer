@@ -36,6 +36,11 @@ struct Landmark {
   double rotation_weight;
 };
 
+struct TimedLandmark {
+  common::Time time;
+  Landmark landmark;
+};
+
 struct LandmarkData {
   common::Time time;
   std::vector<Landmark> landmarks;

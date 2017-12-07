@@ -90,10 +90,10 @@ class OptimizationProblem {
 
   const mapping::MapById<mapping::NodeId, NodeData>& node_data() const;
   const mapping::MapById<mapping::SubmapId, SubmapData>& submap_data() const;
-  const std::map<mapping::LandmarkId, sensor::Landmark>& landmarks() const;
+  const std::map<mapping::LandmarkId, transform::Rigid3d>& landmark_poses() const;
   const sensor::MapByTime<sensor::ImuData>& imu_data() const;
   const sensor::MapByTime<sensor::OdometryData>& odometry_data() const;
-  const sensor::MapByTime<sensor::LandmarkData>& landmark_data() const;
+  const std::map<mapping::LandmarkId, sensor::MapByTime<sensor::TimedLandmark>>& landmark_data_by_id() const;
 
  private:
   std::unique_ptr<transform::Rigid3d> InterpolateOdometry(
@@ -106,10 +106,11 @@ class OptimizationProblem {
   mapping::pose_graph::proto::OptimizationProblemOptions options_;
   mapping::MapById<mapping::NodeId, NodeData> node_data_;
   mapping::MapById<mapping::SubmapId, SubmapData> submap_data_;
-  std::map<mapping::LandmarkId, sensor::Landmark> landmarks_;
+  std::map<mapping::LandmarkId, transform::Rigid3d> landmark_poses_;
   sensor::MapByTime<sensor::ImuData> imu_data_;
   sensor::MapByTime<sensor::OdometryData> odometry_data_;
-  sensor::MapByTime<sensor::LandmarkData> landmark_data_;
+  std::map<mapping::LandmarkId, sensor::MapByTime<sensor::TimedLandmark>> landmark_data_by_id_;
+  std::map<int, std::set<mapping::LandmarkId>> landmarks_in_trajectory_;
 };
 
 }  // namespace pose_graph

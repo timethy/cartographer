@@ -83,28 +83,6 @@ inline std::ostream& operator<<(std::ostream& os, const SubmapId& v) {
 
 // Landmarks are identified by a string
 typedef std::string LandmarkId;
-/*
-struct LandmarkId {
-  int trajectory_id;
-  int landmark_id;
-
-  bool operator==(const LandmarkId& other) const {
-    return std::forward_as_tuple(trajectory_id, landmark_id) ==
-        std::forward_as_tuple(other.trajectory_id, other.landmark_id);
-  }
-
-  bool operator!=(const LandmarkId& other) const { return !operator==(other); }
-
-  bool operator<(const LandmarkId& other) const {
-    return std::forward_as_tuple(trajectory_id, landmark_id) <
-        std::forward_as_tuple(other.trajectory_id, other.landmark_id);
-  }
-};
-
-inline std::ostream& operator<<(std::ostream& os, const LandmarkId& v) {
-  return os << "(" << v.trajectory_id << ", " << v.landmark_id << ")";
-}
- */
 
 template <typename IteratorType>
 class Range {

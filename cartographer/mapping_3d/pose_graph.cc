@@ -600,7 +600,7 @@ PoseGraph::GetTrajectoryNodes() {
   return trajectory_nodes_;
 }
 
-std::map<mapping::LandmarkId, sensor::Landmark> PoseGraph::GetLandmarks() {
+std::map<mapping::LandmarkId, transform::Rigid3d> PoseGraph::GetLandmarkPoses() {
   return {};  // Not implemented yet in 3D.
 }
 
@@ -620,7 +620,9 @@ PoseGraph::GetFixedFramePoseData() {
   return optimization_problem_.fixed_frame_pose_data();
 }
 
-sensor::MapByTime<sensor::LandmarkData> PoseGraph::GetLandmarkData() {
+std::map<mapping::LandmarkId, sensor::MapByTime<sensor::TimedLandmark>>
+PoseGraph::GetLandmarkData() {
+  common::MutexLocker locker(&mutex_);
   return {};  // Not implemented yet in 3D.
 }
 

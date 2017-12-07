@@ -158,9 +158,9 @@ class PoseGraph {
   // Returns the current optimized trajectories.
   virtual MapById<NodeId, TrajectoryNode> GetTrajectoryNodes() = 0;
 
-  // Returns the currently estimated landmarks
-  virtual std::map<LandmarkId, sensor::Landmark>
-  GetLandmarks() = 0;
+  // Returns the currently estimated landmark_poses
+  virtual std::map<LandmarkId, transform::Rigid3d>
+  GetLandmarkPoses() = 0;
 
   // Serializes the constraints and trajectories.
   proto::PoseGraph ToProto();
@@ -176,7 +176,7 @@ class PoseGraph {
   GetFixedFramePoseData() = 0;
 
   // Returns the fixed frame pose data.
-  virtual sensor::MapByTime<sensor::LandmarkData>
+  virtual std::map<LandmarkId, sensor::MapByTime<sensor::TimedLandmark>>
   GetLandmarkData() = 0;
 
   // Returns the collection of constraints.
