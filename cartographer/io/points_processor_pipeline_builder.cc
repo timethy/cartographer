@@ -24,6 +24,7 @@
 #include "cartographer/io/hybrid_grid_points_processor.h"
 #include "cartographer/io/intensity_to_color_points_processor.h"
 #include "cartographer/io/min_max_range_filtering_points_processor.h"
+#include "cartographer/io/min_max_height_filtering_points_processor.h"
 #include "cartographer/io/null_points_processor.h"
 #include "cartographer/io/outlier_removing_points_processor.h"
 #include "cartographer/io/pcd_writing_points_processor.h"
@@ -84,6 +85,7 @@ void RegisterBuiltInPointsProcessors(
   RegisterPlainPointsProcessor<FixedRatioSamplingPointsProcessor>(builder);
   RegisterPlainPointsProcessor<FrameIdFilteringPointsProcessor>(builder);
   RegisterPlainPointsProcessor<MinMaxRangeFiteringPointsProcessor>(builder);
+  RegisterPlainPointsProcessor<MinMaxHeightFiteringPointsProcessor>(builder);
   RegisterPlainPointsProcessor<OutlierRemovingPointsProcessor>(builder);
   RegisterPlainPointsProcessor<ColoringPointsProcessor>(builder);
   RegisterPlainPointsProcessor<IntensityToColorPointsProcessor>(builder);
@@ -129,7 +131,7 @@ PointsProcessorPipelineBuilder::CreatePipeline(
     auto factory_it = factories_.find(action);
     CHECK(factory_it != factories_.end())
         << "Unknown action '" << action
-        << "'. Did you register the correspoinding PointsProcessor?";
+        << "'. Did you register the corresponding PointsProcessor?";
     pipeline.push_back(factory_it->second(it->get(), pipeline.back().get()));
   }
   return pipeline;
