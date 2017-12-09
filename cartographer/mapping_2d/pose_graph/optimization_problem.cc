@@ -97,8 +97,6 @@ std::unique_ptr<transform::Rigid3d> Interpolate(
     return nullptr;
   }
 
-  LOG(INFO) << "Interpolating from " << prev_it->time << " (" << prev_it->landmark.transform << ")\n"
-            << "to " << it->time << " (" << it->landmark.transform << ")";
   return common::make_unique<transform::Rigid3d>(
       Interpolate(transform::TimestampedTransform{prev_it->time, prev_it->landmark.transform},
                   transform::TimestampedTransform{it->time, it->landmark.transform}, time)
@@ -317,8 +315,8 @@ void OptimizationProblem::Solve(const std::vector<Constraint>& constraints,
             landmark_pose, options_.landmark_translation_weight(),
             options_.landmark_rotation_weight()};
 
-        LOG(INFO) << "Add landmark pose constraint: " << landmark_pose << " from node: " << node_id << "\n"
-                  << "node at : " << node_data.pose << " with gravity alignment " << node_data.gravity_alignment.vec();
+        VLOG(0) << "Add landmark pose constraint: " << landmark_pose << " from node: " << node_id << "\n"
+                << "node at : " << node_data.pose << " with gravity alignment " << node_data.gravity_alignment.vec();
 
         problem.AddResidualBlock(
             new ceres::AutoDiffCostFunction<SpaCostFunction, 3, 3, 3>(
