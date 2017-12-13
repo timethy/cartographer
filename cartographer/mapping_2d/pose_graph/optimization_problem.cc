@@ -242,8 +242,6 @@ void OptimizationProblem::Solve(const std::vector<Constraint>& constraints,
         C_submaps.at(constraint.submap_id).data(),
         C_nodes.at(constraint.node_id).data());
   }
-  
-  size_t n_landmark_constraints = 0;
 
   for (auto node_it = node_data_.begin(); node_it != node_data_.end();) {
     const int trajectory_id = node_it->id.trajectory_id;
@@ -278,6 +276,7 @@ void OptimizationProblem::Solve(const std::vector<Constraint>& constraints,
     }
   }
 
+  size_t n_landmark_constraints = 0;
   for (auto node_it = node_data_.begin(); node_it != node_data_.end();) {
     const int trajectory_id = node_it->id.trajectory_id;
     const auto trajectory_end = node_data_.EndOfTrajectory(trajectory_id);
@@ -392,7 +391,7 @@ OptimizationProblem::odometry_data() const {
 const std::map<mapping::LandmarkId, sensor::MapByTime<sensor::TimedLandmark>>&
 OptimizationProblem::landmark_data_by_id() const {
   return landmark_data_by_id_;
-};
+}
 
 std::unique_ptr<transform::Rigid3d> OptimizationProblem::InterpolateOdometry(
     const int trajectory_id, const common::Time time) const {
