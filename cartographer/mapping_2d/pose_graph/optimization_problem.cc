@@ -314,7 +314,7 @@ void OptimizationProblem::Solve(const std::vector<Constraint>& constraints,
             landmark_pose, options_.landmark_translation_weight(),
             options_.landmark_rotation_weight()};
 
-        VLOG(0) << "Add landmark pose constraint: " << landmark_pose << " from node: " << node_id << "\n"
+        VLOG(10) << "Add landmark pose constraint: " << landmark_pose << " from node: " << node_id << "\n"
                 << "node at : " << node_data.pose << " with gravity alignment " << node_data.gravity_alignment.vec();
 
         problem.AddResidualBlock(
